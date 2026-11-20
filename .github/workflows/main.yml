@@ -1,0 +1,58 @@
+
+name: Check MobileSurvival Unity Project
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.zip'
+      - '.github/workflows/main.yml'
+
+jobs:
+  check-project:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download source
+        uses: actions/checkout@v4
+
+      - name: Check Unity project
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          import glob
+          import os
+
+          zips = glob.glob("*.zip")
+          report = []
+
+          if not zips:
+              report.append("ERROR: ZIP archive not found")
+          else:
+              for path in zips:
+                  report.append("Archive: " + path)
+                  with zipfile.ZipFile(path) as z:
+                      names = z.namelist()
+                      checks = {
+                          "Assets": any(n.endswith("Assets/") or "/Assets/" in n for n in names),
+                          "Packages/manifest.json": any(n.endswith("Packages/manifest.json") for n in names),
+                          "ProjectSettings/ProjectVersion.txt": any(n.endswith("ProjectSettings/ProjectVersion.txt") for n in names),
+                      }
+                      for item, found in checks.items():
+                          report.append(
+                              ("OK: " if found else "MISSING: ") + item
+                          )
+
+                      report.append("Files in archive: " + str(len(names)))
+
+          with open("unity-check.txt", "w") as f:
+              f.write("\n".join(report))
+
+          print("\n".join(report))
+          PY
+
+      - name: Save report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unity-Project-Check
+          path: unity-check.txt
